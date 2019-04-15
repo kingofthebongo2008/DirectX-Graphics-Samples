@@ -11,7 +11,7 @@
 // Author(s):  Alex Nankervis
 //             James Stanard
 //
-
+#include "pch.h"
 #include "GameCore.h"
 #include "GraphicsCore.h"
 #include "CameraController.h"
@@ -33,6 +33,11 @@
 #include "ParticleEffectManager.h"
 #include "GameInput.h"
 #include "./ForwardPlusLighting.h"
+
+#include <ppl.h>
+#include <pplawait.h>
+#include <ppltasks.h>
+#include <array>
 
 // To enable wave intrinsics, uncomment this macro and #define DXIL in Core/GraphcisCore.cpp.
 // Run CompileSM6Test.bat to compile the relevant shaders with DXC.
@@ -60,7 +65,7 @@ class ModelViewer : public GameCore::IGameApp
 {
 public:
 
-    ModelViewer( void ) {}
+	ModelViewer() = default;
 
     virtual void Startup( void ) override;
     virtual void Cleanup( void ) override;
@@ -159,30 +164,31 @@ void ModelViewer::Startup( void )
 		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
-    // Depth-only (2x rate)
-    m_DepthPSO.SetRootSignature(m_RootSig);
-    m_DepthPSO.SetRasterizerState(RasterizerDefault);
-    m_DepthPSO.SetBlendState(BlendNoColorWrite);
-    m_DepthPSO.SetDepthStencilState(DepthStateReadWrite);
-    m_DepthPSO.SetInputLayout(_countof(vertElemDepth), vertElemDepth);
-    m_DepthPSO.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    m_DepthPSO.SetRenderTargetFormats(0, nullptr, DepthFormat);
-    m_DepthPSO.SetVertexShader(g_pDepthViewerVS, sizeof(g_pDepthViewerVS));
-    m_DepthPSO.Finalize();
 
-    // Depth-only shading but with alpha testing
-    m_CutoutDepthPSO = m_DepthPSO;
+
+	// Depth-only (2x rate)
+	m_DepthPSO.SetRootSignature(m_RootSig);
+	m_DepthPSO.SetRasterizerState(RasterizerDefault);
+	m_DepthPSO.SetBlendState(BlendNoColorWrite);
+	m_DepthPSO.SetDepthStencilState(DepthStateReadWrite);
+	m_DepthPSO.SetInputLayout(_countof(vertElemDepth), vertElemDepth);
+	m_DepthPSO.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+	m_DepthPSO.SetRenderTargetFormats(0, nullptr, DepthFormat);
+	m_DepthPSO.SetVertexShader(g_pDepthViewerVS, sizeof(g_pDepthViewerVS));
+			
+	
+	// Depth-only shading but with alpha testing
+	m_CutoutDepthPSO = m_DepthPSO;
 	m_CutoutDepthPSO.SetInputLayout(_countof(vertElemDepthAlpha), vertElemDepthAlpha);
 	m_CutoutDepthPSO.SetVertexShader(g_pDepthViewerVSAlpha, sizeof(g_pDepthViewerVSAlpha));
 	m_CutoutDepthPSO.SetPixelShader(g_pDepthViewerPSAlpha, sizeof(g_pDepthViewerPSAlpha));
-    m_CutoutDepthPSO.SetRasterizerState(RasterizerTwoSided);
-    m_CutoutDepthPSO.Finalize();
+	m_CutoutDepthPSO.SetRasterizerState(RasterizerTwoSided);
 
-    // Depth-only but with a depth bias and/or render only backfaces
+	// Depth-only but with a depth bias and/or render only backfaces
     m_ShadowPSO = m_DepthPSO;
     m_ShadowPSO.SetRasterizerState(RasterizerShadow);
     m_ShadowPSO.SetRenderTargetFormats(0, nullptr, g_ShadowBuffer.GetFormat());
-    m_ShadowPSO.Finalize();
+    
 
     // Shadows with alpha testing
     m_CutoutShadowPSO = m_ShadowPSO;
@@ -190,7 +196,8 @@ void ModelViewer::Startup( void )
 	m_CutoutShadowPSO.SetVertexShader(g_pDepthViewerVSAlpha, sizeof(g_pDepthViewerVSAlpha));
 	m_CutoutShadowPSO.SetPixelShader(g_pDepthViewerPSAlpha, sizeof(g_pDepthViewerPSAlpha));
     m_CutoutShadowPSO.SetRasterizerState(RasterizerShadowTwoSided);
-    m_CutoutShadowPSO.Finalize();
+
+	
 
     // Full color pass
     m_ModelPSO = m_DepthPSO;
@@ -200,7 +207,6 @@ void ModelViewer::Startup( void )
     m_ModelPSO.SetRenderTargetFormats(1, &ColorFormat, DepthFormat);
     m_ModelPSO.SetVertexShader( g_pModelViewerVS, sizeof(g_pModelViewerVS) );
     m_ModelPSO.SetPixelShader( g_pModelViewerPS, sizeof(g_pModelViewerPS) );
-    m_ModelPSO.Finalize();
 
 #ifdef _WAVE_OP
     m_DepthWaveOpsPSO = m_DepthPSO;
@@ -215,38 +221,64 @@ void ModelViewer::Startup( void )
 
     m_CutoutModelPSO = m_ModelPSO;
     m_CutoutModelPSO.SetRasterizerState(RasterizerTwoSided);
-    m_CutoutModelPSO.Finalize();
 
     // A debug shader for counting lights in a tile
     m_WaveTileCountPSO = m_ModelPSO;
     m_WaveTileCountPSO.SetPixelShader(g_pWaveTileCountPS, sizeof(g_pWaveTileCountPS));
-    m_WaveTileCountPSO.Finalize();
+	
+	concurrency::task_group g;
 
-    Lighting::InitializeResources();
+	g.run([this]()
+		{
+			std::array< GraphicsPSO*, 7 > pso =
+			{
+				&m_CutoutDepthPSO,
+				&m_DepthPSO,
+				&m_CutoutModelPSO,
+				&m_ShadowPSO,
+				&m_CutoutShadowPSO,
+				&m_ModelPSO,
+				&m_WaveTileCountPSO
+			};
+			concurrency::parallel_for_each(pso.begin(), pso.end(), [] (GraphicsPSO* p)
+			{
+					p->Finalize();
+			});
+	});
 
-    m_ExtraTextures[0] = g_SSAOFullScreen.GetSRV();
-    m_ExtraTextures[1] = g_ShadowBuffer.GetSRV();
+	g.run([]()
+	{
+		Lighting::InitializeResources();
+	});
 
-    TextureManager::Initialize(L"Textures/");
-    ASSERT(m_Model.Load("Models/sponza.h3d"), "Failed to load model");
-    ASSERT(m_Model.m_Header.meshCount > 0, "Model contains no meshes");
+	g.run([this]()
+	{
+			Lighting::InitializeResources();
+	});
 
-    // The caller of this function can override which materials are considered cutouts
-    m_pMaterialIsCutout.resize(m_Model.m_Header.materialCount);
-    for (uint32_t i = 0; i < m_Model.m_Header.materialCount; ++i)
-    {
-        const Model::Material& mat = m_Model.m_pMaterial[i];
-        if (std::string(mat.texDiffusePath).find("thorn") != std::string::npos ||
-            std::string(mat.texDiffusePath).find("plant") != std::string::npos ||
-            std::string(mat.texDiffusePath).find("chain") != std::string::npos)
-        {
-            m_pMaterialIsCutout[i] = true;
-        }
-        else
-        {
-            m_pMaterialIsCutout[i] = false;
-        }
-    }
+	g.run_and_wait([this]()
+	{
+		TextureManager::Initialize(L"Textures/");
+		ASSERT(m_Model.Load("Models/sponza.h3d"), "Failed to load model");
+		ASSERT(m_Model.m_Header.meshCount > 0, "Model contains no meshes");
+
+		// The caller of this function can override which materials are considered cutouts
+		m_pMaterialIsCutout.resize(m_Model.m_Header.materialCount);
+		for (uint32_t i = 0; i < m_Model.m_Header.materialCount; ++i)
+		{
+			const Model::Material& mat = m_Model.m_pMaterial[i];
+			if (std::string(mat.texDiffusePath).find("thorn") != std::string::npos ||
+				std::string(mat.texDiffusePath).find("plant") != std::string::npos ||
+				std::string(mat.texDiffusePath).find("chain") != std::string::npos)
+			{
+				m_pMaterialIsCutout[i] = true;
+			}
+			else
+			{
+				m_pMaterialIsCutout[i] = false;
+			}
+		}
+	});
 
     CreateParticleEffects();
 
@@ -265,6 +297,8 @@ void ModelViewer::Startup( void )
 
     Lighting::CreateRandomLights(m_Model.GetBoundingBox().min, m_Model.GetBoundingBox().max);
 
+	m_ExtraTextures[0] = g_SSAOFullScreen.GetSRV();
+	m_ExtraTextures[1] = g_ShadowBuffer.GetSRV();
     m_ExtraTextures[2] = Lighting::m_LightBuffer.GetSRV();
     m_ExtraTextures[3] = Lighting::m_LightShadowArray.GetSRV();
     m_ExtraTextures[4] = Lighting::m_LightGrid.GetSRV();

@@ -69,6 +69,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ForwardPlusLighting.cpp" />
+    <ClCompile Include="GBuffer.cpp" />
     <ClCompile Include="ModelViewer.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -181,6 +182,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ForwardPlusLighting.h" />
+    <ClInclude Include="GBuffer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ItemDefinitionGroup>
