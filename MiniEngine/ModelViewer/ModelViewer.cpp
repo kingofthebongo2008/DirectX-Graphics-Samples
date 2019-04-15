@@ -40,8 +40,11 @@
 
 #include "CompiledShaders/DepthViewerVS.h"
 #include "CompiledShaders/DepthViewerPS.h"
+#include "CompiledShaders/DepthViewerVSAlpha.h"
+#include "CompiledShaders/DepthViewerPSAlpha.h"
 #include "CompiledShaders/ModelViewerVS.h"
 #include "CompiledShaders/ModelViewerPS.h"
+
 #ifdef _WAVE_OP
 #include "CompiledShaders/DepthViewerVS_SM6.h"
 #include "CompiledShaders/ModelViewerVS_SM6.h"
@@ -145,12 +148,23 @@ void ModelViewer::Startup( void )
         { "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
+	D3D12_INPUT_ELEMENT_DESC vertElemDepth[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	D3D12_INPUT_ELEMENT_DESC vertElemDepthAlpha[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
     // Depth-only (2x rate)
     m_DepthPSO.SetRootSignature(m_RootSig);
     m_DepthPSO.SetRasterizerState(RasterizerDefault);
     m_DepthPSO.SetBlendState(BlendNoColorWrite);
     m_DepthPSO.SetDepthStencilState(DepthStateReadWrite);
-    m_DepthPSO.SetInputLayout(_countof(vertElem), vertElem);
+    m_DepthPSO.SetInputLayout(_countof(vertElemDepth), vertElemDepth);
     m_DepthPSO.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
     m_DepthPSO.SetRenderTargetFormats(0, nullptr, DepthFormat);
     m_DepthPSO.SetVertexShader(g_pDepthViewerVS, sizeof(g_pDepthViewerVS));
@@ -158,7 +172,9 @@ void ModelViewer::Startup( void )
 
     // Depth-only shading but with alpha testing
     m_CutoutDepthPSO = m_DepthPSO;
-    m_CutoutDepthPSO.SetPixelShader(g_pDepthViewerPS, sizeof(g_pDepthViewerPS));
+	m_CutoutDepthPSO.SetInputLayout(_countof(vertElemDepthAlpha), vertElemDepthAlpha);
+	m_CutoutDepthPSO.SetVertexShader(g_pDepthViewerVSAlpha, sizeof(g_pDepthViewerVSAlpha));
+	m_CutoutDepthPSO.SetPixelShader(g_pDepthViewerPSAlpha, sizeof(g_pDepthViewerPSAlpha));
     m_CutoutDepthPSO.SetRasterizerState(RasterizerTwoSided);
     m_CutoutDepthPSO.Finalize();
 
@@ -170,12 +186,15 @@ void ModelViewer::Startup( void )
 
     // Shadows with alpha testing
     m_CutoutShadowPSO = m_ShadowPSO;
-    m_CutoutShadowPSO.SetPixelShader(g_pDepthViewerPS, sizeof(g_pDepthViewerPS));
+	m_CutoutShadowPSO.SetInputLayout(_countof(vertElemDepthAlpha), vertElemDepthAlpha);
+	m_CutoutShadowPSO.SetVertexShader(g_pDepthViewerVSAlpha, sizeof(g_pDepthViewerVSAlpha));
+	m_CutoutShadowPSO.SetPixelShader(g_pDepthViewerPSAlpha, sizeof(g_pDepthViewerPSAlpha));
     m_CutoutShadowPSO.SetRasterizerState(RasterizerShadowTwoSided);
     m_CutoutShadowPSO.Finalize();
 
     // Full color pass
     m_ModelPSO = m_DepthPSO;
+	m_ModelPSO.SetInputLayout(_countof(vertElem), vertElem);
     m_ModelPSO.SetBlendState(BlendDisable);
     m_ModelPSO.SetDepthStencilState(DepthStateTestEqual);
     m_ModelPSO.SetRenderTargetFormats(1, &ColorFormat, DepthFormat);

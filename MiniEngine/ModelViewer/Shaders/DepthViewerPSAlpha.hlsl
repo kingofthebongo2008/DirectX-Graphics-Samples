@@ -8,31 +8,23 @@
 //
 // Developed by Minigraph
 //
-// Author(s):  James Stanard
-//             Alex Nankervis
+// Author(s):    James Stanard
 //
 
 #include "ModelViewerRS.hlsli"
 
-cbuffer VSConstants : register(b0)
-{
-    float4x4 modelToProjection;
-};
-
-struct VSInput
-{
-    float3 position : POSITION;
- };
-
 struct VSOutput
 {
     float4 pos : SV_Position;
- };
+    float2 uv : TexCoord0;
+};
+
+Texture2D<float4>    texDiffuse        : register(t0);
+SamplerState        sampler0        : register(s0);
 
 [RootSignature(ModelViewer_RootSig)]
-VSOutput main(VSInput vsInput)
+void main(VSOutput vsOutput)
 {
-    VSOutput vsOutput;
-    vsOutput.pos = mul(modelToProjection, float4(vsInput.position, 1.0));
-     return vsOutput;
+    if (texDiffuse.Sample(sampler0, vsOutput.uv).a < 0.5)
+        discard;
 }
