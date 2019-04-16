@@ -14,7 +14,7 @@
 // Thanks to Michal Drobot for his feedback.
 
 #include "ModelViewerRS.hlsli"
-#include "LightGrid.hlsli"
+#include "Color.hlsli"
 
 // outdated warning about for-loop variable scope
 #pragma warning (disable: 3078)
@@ -56,7 +56,8 @@ PSOutput main(VSOutput vsOutput)
 	float4 sampleAlbedo  = texDiffuse.Sample(sampler0, vsOutput.uv);
 
 	float3 diffuseAlbedo = sampleAlbedo.rgb;
-	float gloss = 128.0;
+	float gloss		= 128.0;
+	float glossMax	= gloss;;
 
 	float3 normal;
 	{
@@ -72,9 +73,8 @@ PSOutput main(VSOutput vsOutput)
 
 	PSOutput r = (PSOutput)0;
 
-	r.attributes0 = float4(diffuseAlbedo, 1);
-	r.attributes1 = float4(normal * 0.5 + 0.5, 1);
-	r.attributes2 = float4(specularMask, gloss, 1, 1);
+	r.attributes0 = float4( color_eotf_srgb ( diffuseAlbedo ) , gloss / glossMax );
+	r.attributes1 = float4( normal * 0.5 + 0.5, specularMask);
 
 	return r;
 }
