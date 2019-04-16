@@ -45,10 +45,14 @@
 
 #include "CompiledShaders/DepthViewerVS.h"
 #include "CompiledShaders/DepthViewerPS.h"
-#include "CompiledShaders/DepthViewerVSAlpha.h"
-#include "CompiledShaders/DepthViewerPSAlpha.h"
+#include "CompiledShaders/DepthViewerAlphaVS.h"
+#include "CompiledShaders/DepthViewerAlphaPS.h"
 #include "CompiledShaders/ModelViewerVS.h"
 #include "CompiledShaders/ModelViewerPS.h"
+#include "CompiledShaders/ModelViewerAttributesVS.h"
+#include "CompiledShaders/ModelViewerAttributesPS.h"
+#include "CompiledShaders/ModelViewerAttributesAlphaVS.h"
+#include "CompiledShaders/ModelViewerAttributesAlphaPS.h"
 
 #ifdef _WAVE_OP
 #include "CompiledShaders/DepthViewerVS_SM6.h"
@@ -90,6 +94,8 @@ private:
     GraphicsPSO m_DepthPSO;
     GraphicsPSO m_CutoutDepthPSO;
     GraphicsPSO m_ModelPSO;
+	GraphicsPSO m_ModelAttributesPSO;
+	GraphicsPSO m_ModelAttributesCutoutPSO;
 #ifdef _WAVE_OP
     GraphicsPSO m_DepthWaveOpsPSO;
     GraphicsPSO m_ModelWaveOpsPSO;
@@ -180,8 +186,8 @@ void ModelViewer::Startup( void )
 	// Depth-only shading but with alpha testing
 	m_CutoutDepthPSO = m_DepthPSO;
 	m_CutoutDepthPSO.SetInputLayout(_countof(vertElemDepthAlpha), vertElemDepthAlpha);
-	m_CutoutDepthPSO.SetVertexShader(g_pDepthViewerVSAlpha, sizeof(g_pDepthViewerVSAlpha));
-	m_CutoutDepthPSO.SetPixelShader(g_pDepthViewerPSAlpha, sizeof(g_pDepthViewerPSAlpha));
+	m_CutoutDepthPSO.SetVertexShader(g_pDepthViewerAlphaVS, sizeof(g_pDepthViewerAlphaVS));
+	m_CutoutDepthPSO.SetPixelShader(g_pDepthViewerAlphaPS, sizeof(g_pDepthViewerAlphaPS));
 	m_CutoutDepthPSO.SetRasterizerState(RasterizerTwoSided);
 
 	// Depth-only but with a depth bias and/or render only backfaces
@@ -193,20 +199,35 @@ void ModelViewer::Startup( void )
     // Shadows with alpha testing
     m_CutoutShadowPSO = m_ShadowPSO;
 	m_CutoutShadowPSO.SetInputLayout(_countof(vertElemDepthAlpha), vertElemDepthAlpha);
-	m_CutoutShadowPSO.SetVertexShader(g_pDepthViewerVSAlpha, sizeof(g_pDepthViewerVSAlpha));
-	m_CutoutShadowPSO.SetPixelShader(g_pDepthViewerPSAlpha, sizeof(g_pDepthViewerPSAlpha));
+	m_CutoutShadowPSO.SetVertexShader(g_pDepthViewerAlphaVS, sizeof(g_pDepthViewerAlphaVS));
+	m_CutoutShadowPSO.SetPixelShader(g_pDepthViewerAlphaPS, sizeof(g_pDepthViewerAlphaPS));
     m_CutoutShadowPSO.SetRasterizerState(RasterizerShadowTwoSided);
 
-	
-
     // Full color pass
+	
     m_ModelPSO = m_DepthPSO;
 	m_ModelPSO.SetInputLayout(_countof(vertElem), vertElem);
     m_ModelPSO.SetBlendState(BlendDisable);
+	m_ModelPSO.SetDepthStencilState(DepthStateReadOnly);
     m_ModelPSO.SetDepthStencilState(DepthStateTestEqual);
     m_ModelPSO.SetRenderTargetFormats(1, &ColorFormat, DepthFormat);
     m_ModelPSO.SetVertexShader( g_pModelViewerVS, sizeof(g_pModelViewerVS) );
     m_ModelPSO.SetPixelShader( g_pModelViewerPS, sizeof(g_pModelViewerPS) );
+
+
+	{
+		m_ModelAttributesPSO = m_ModelPSO;
+
+		DXGI_FORMAT format[] = { DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM , DXGI_FORMAT_R8G8B8A8_UNORM };
+		m_ModelAttributesPSO.SetRenderTargetFormats(3, &format[0], DXGI_FORMAT_D32_FLOAT);
+		m_ModelAttributesPSO.SetVertexShader(g_pModelViewerAttributesVS, sizeof(g_pModelViewerAttributesVS));
+		m_ModelAttributesPSO.SetPixelShader(g_pModelViewerAttributesPS, sizeof(g_pModelViewerAttributesPS));
+
+
+		m_ModelAttributesCutoutPSO = m_ModelAttributesPSO;
+		m_ModelAttributesCutoutPSO.SetRasterizerState(RasterizerTwoSided);
+	}
+
 
 #ifdef _WAVE_OP
     m_DepthWaveOpsPSO = m_DepthPSO;
@@ -230,7 +251,7 @@ void ModelViewer::Startup( void )
 
 	g.run([this]()
 		{
-			std::array< GraphicsPSO*, 7 > pso =
+			std::array< GraphicsPSO*, 9 > pso =
 			{
 				&m_CutoutDepthPSO,
 				&m_DepthPSO,
@@ -238,7 +259,9 @@ void ModelViewer::Startup( void )
 				&m_ShadowPSO,
 				&m_CutoutShadowPSO,
 				&m_ModelPSO,
-				&m_WaveTileCountPSO
+				&m_WaveTileCountPSO,
+				&m_ModelAttributesPSO,
+				&m_ModelAttributesCutoutPSO
 			};
 			concurrency::parallel_for_each(pso.begin(), pso.end(), [] (GraphicsPSO* p)
 			{
@@ -489,7 +512,8 @@ void ModelViewer::RenderScene( void )
     RenderLightShadows(gfxContext);
 
     {
-        ScopedTimer _prof(L"Z PrePass", gfxContext);
+
+		ScopedTimer _prof(L"Z PrePass", gfxContext);
 
         gfxContext.SetDynamicConstantBufferView(1, sizeof(psConstants), &psConstants);
 
@@ -514,6 +538,41 @@ void ModelViewer::RenderScene( void )
             RenderObjects(gfxContext, m_ViewProjMatrix, kCutout );
         }
     }
+
+	{
+		ScopedTimer _prof(L"GBuffer Pass", gfxContext);
+
+		gfxContext.SetDynamicConstantBufferView(1, sizeof(psConstants), &psConstants);
+
+		{
+			ScopedTimer _prof1(L"Opaque", gfxContext);
+			gfxContext.TransitionResource(g_GBufferAttributes0, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+			gfxContext.TransitionResource(g_GBufferAttributes1, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+			gfxContext.TransitionResource(g_GBufferAttributes2, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+
+			D3D12_CPU_DESCRIPTOR_HANDLE RTVs[] =
+			{
+				g_GBufferAttributes0.GetRTV(),
+				g_GBufferAttributes1.GetRTV(),
+				g_GBufferAttributes2.GetRTV()
+			};
+
+			gfxContext.ClearColor(g_GBufferAttributes0);
+			gfxContext.ClearColor(g_GBufferAttributes1);
+			gfxContext.ClearColor(g_GBufferAttributes2);
+
+			gfxContext.SetPipelineState(m_ModelAttributesPSO);
+			gfxContext.SetRenderTargets(_countof(RTVs), RTVs, g_SceneDepthBuffer.GetDSV());
+			gfxContext.SetViewportAndScissor(m_MainViewport, m_MainScissor);
+			RenderObjects(gfxContext, m_ViewProjMatrix, kOpaque);
+		}
+
+		{
+			ScopedTimer _prof2(L"Cutout", gfxContext);
+			gfxContext.SetPipelineState(m_ModelAttributesCutoutPSO);
+			RenderObjects(gfxContext, m_ViewProjMatrix, kCutout);
+		}
+	}
 
     SSAO::Render(gfxContext, m_Camera);
 
