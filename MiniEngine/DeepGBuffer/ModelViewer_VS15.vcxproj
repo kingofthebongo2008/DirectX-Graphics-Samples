@@ -157,13 +157,13 @@
     <FxCompile Include="Shaders\DepthViewerPS.hlsl">
       <ShaderType>Pixel</ShaderType>
     </FxCompile>
-    <FxCompile Include="Shaders\DepthViewerPSAlpha.hlsl">
+    <FxCompile Include="Shaders\DepthViewerAlphaPS.hlsl">
       <ShaderType>Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Shaders\DepthViewerVS.hlsl">
       <ShaderType>Vertex</ShaderType>
     </FxCompile>
-    <FxCompile Include="Shaders\DepthViewerVSAlpha.hlsl">
+    <FxCompile Include="Shaders\DepthViewerAlphaVS.hlsl">
       <ShaderType>Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="Shaders\FillLightGridCS_16.hlsl" />
@@ -176,6 +176,22 @@
     <FxCompile Include="Shaders\ModelViewerVS.hlsl">
       <ShaderType>Vertex</ShaderType>
     </FxCompile>
+
+   <FxCompile Include="Shaders\ModelViewerAttributesPS.hlsl">
+      <ShaderType>Pixel</ShaderType>
+    </FxCompile>
+
+   <FxCompile Include="Shaders\ModelViewerAttributesAlphaPS.hlsl">
+      <ShaderType>Pixel</ShaderType>
+    </FxCompile>
+
+   <FxCompile Include="Shaders\ModelViewerAttributesVS.hlsl">
+      <ShaderType>Vertex</ShaderType>
+    </FxCompile>
+   <FxCompile Include="Shaders\ModelViewerAttributesAlphaVS.hlsl">
+      <ShaderType>Vertex</ShaderType>
+    </FxCompile>
+
     <FxCompile Include="Shaders\WaveTileCountPS.hlsl">
       <ShaderType>Pixel</ShaderType>
     </FxCompile>
