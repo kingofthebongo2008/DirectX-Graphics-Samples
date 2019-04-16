@@ -11,7 +11,7 @@
 // Author(s):  Alex Nankervis
 //             James Stanard
 //
-
+#include "pch.h"
 #include "ForwardPlusLighting.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
