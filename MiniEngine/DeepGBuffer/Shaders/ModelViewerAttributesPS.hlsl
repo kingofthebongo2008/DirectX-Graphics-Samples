@@ -54,11 +54,9 @@ void AntiAliasSpecular( inout float3 texNormal, inout float gloss )
 PSOutput main(VSOutput vsOutput)
 {
 	float4 sampleAlbedo  = texDiffuse.Sample(sampler0, vsOutput.uv);
+
 	float3 diffuseAlbedo = sampleAlbedo.rgb;
 	float gloss = 128.0;
-
-	if (sampleAlbedo.a < 0.5)
-		discard;
 
 	float3 normal;
 	{

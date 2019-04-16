@@ -34,7 +34,7 @@ namespace Math
 
 namespace DeferredLighting
 {
-    extern ColorBuffer m_Diffuse;
+    extern ColorBuffer m_Albedo;
     extern ColorBuffer m_Normal;
 	extern ColorBuffer m_Specular;
 

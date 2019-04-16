@@ -24,21 +24,15 @@ using namespace Graphics;
 
 namespace DeferredLighting
 {
-	ColorBuffer m_Diffuse;
-	ColorBuffer m_Normal;
-	ColorBuffer m_Specular;
 }
 
 void DeferredLighting::InitializeResources( void )
 {
-   
+
 }
 
 void DeferredLighting::Shutdown(void)
 {
-	m_Diffuse.Destroy();
-	m_Normal.Destroy();
-	m_Specular.Destroy();
 }
 
 void DeferredLighting::Direct(GraphicsContext& gfxContext, const Math::Camera& camera)

@@ -44,15 +44,13 @@
 //#define _WAVE_OP
 
 #include "CompiledShaders/DepthViewerVS.h"
-#include "CompiledShaders/DepthViewerPS.h"
 #include "CompiledShaders/DepthViewerAlphaVS.h"
 #include "CompiledShaders/DepthViewerAlphaPS.h"
 #include "CompiledShaders/ModelViewerVS.h"
 #include "CompiledShaders/ModelViewerPS.h"
 #include "CompiledShaders/ModelViewerAttributesVS.h"
 #include "CompiledShaders/ModelViewerAttributesPS.h"
-#include "CompiledShaders/ModelViewerAttributesAlphaVS.h"
-#include "CompiledShaders/ModelViewerAttributesAlphaPS.h"
+
 
 #ifdef _WAVE_OP
 #include "CompiledShaders/DepthViewerVS_SM6.h"

@@ -154,9 +154,6 @@
     <None Include="Shaders\ModelViewerRS.hlsli" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Shaders\DepthViewerPS.hlsl">
-      <ShaderType>Pixel</ShaderType>
-    </FxCompile>
     <FxCompile Include="Shaders\DepthViewerAlphaPS.hlsl">
       <ShaderType>Pixel</ShaderType>
     </FxCompile>
@@ -181,14 +178,7 @@
       <ShaderType>Pixel</ShaderType>
     </FxCompile>
 
-   <FxCompile Include="Shaders\ModelViewerAttributesAlphaPS.hlsl">
-      <ShaderType>Pixel</ShaderType>
-    </FxCompile>
-
    <FxCompile Include="Shaders\ModelViewerAttributesVS.hlsl">
-      <ShaderType>Vertex</ShaderType>
-    </FxCompile>
-   <FxCompile Include="Shaders\ModelViewerAttributesAlphaVS.hlsl">
       <ShaderType>Vertex</ShaderType>
     </FxCompile>
 

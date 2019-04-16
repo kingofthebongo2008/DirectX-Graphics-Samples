@@ -37,7 +37,7 @@ struct PSOutput
 	float4 attributes2 : SV_Target2;
 };
 
-Texture2D<float3> texDiffuse	: register(t0);
+Texture2D<float4> texDiffuse	: register(t0);
 Texture2D<float3> texSpecular   : register(t1);
 Texture2D<float3> texNormal     : register(t3);
 SamplerState sampler0			: register(s0);
@@ -53,7 +53,9 @@ void AntiAliasSpecular( inout float3 texNormal, inout float gloss )
 [RootSignature(ModelViewer_RootSig)]
 PSOutput main(VSOutput vsOutput)
 {
-    float3 diffuseAlbedo = texDiffuse.Sample(sampler0, vsOutput.uv);
+	float4 sampleAlbedo  = texDiffuse.Sample(sampler0, vsOutput.uv);
+
+	float3 diffuseAlbedo = sampleAlbedo.rgb;
 	float gloss = 128.0;
 
 	float3 normal;
