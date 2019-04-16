@@ -35,17 +35,14 @@ struct VSOutput
 
 Texture2D<float3> texDiffuse        : register(t0);
 Texture2D<float3> texSpecular        : register(t1);
-//Texture2D<float4> texEmissive        : register(t2);
 Texture2D<float3> texNormal            : register(t3);
-//Texture2D<float4> texLightmap        : register(t4);
-//Texture2D<float4> texReflection    : register(t5);
 Texture2D<float> texSSAO            : register(t64);
 Texture2D<float> texShadow            : register(t65);
 
 StructuredBuffer<LightData> lightBuffer : register(t66);
 Texture2DArray<float> lightShadowArrayTex : register(t67);
 ByteAddressBuffer lightGrid : register(t68);
-ByteAddressBuffer lightGridBitMask : register(t69);
+
 
 cbuffer PSConstants : register(b0)
 {
@@ -309,17 +306,6 @@ float3 main(VSOutput vsOutput) : SV_Target0
     uint2 tilePos = GetTilePos(pixelPos, InvTileDim.xy);
     uint tileIndex = GetTileIndex(tilePos, TileCount.x);
     uint tileOffset = GetTileOffset(tileIndex);
-
-    // Light Grid Preloading setup
-    uint lightBitMaskGroups[4] = { 0, 0, 0, 0 };
-#if defined(LIGHT_GRID_PRELOADING)
-    uint4 lightBitMask = lightGridBitMask.Load4(tileIndex * 16);
-    
-    lightBitMaskGroups[0] = lightBitMask.x;
-    lightBitMaskGroups[1] = lightBitMask.y;
-    lightBitMaskGroups[2] = lightBitMask.z;
-    lightBitMaskGroups[3] = lightBitMask.w;
-#endif
 
 #define POINT_LIGHT_ARGS \
     diffuseAlbedo, \
