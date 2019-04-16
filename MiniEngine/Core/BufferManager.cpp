@@ -80,6 +80,10 @@ namespace Graphics
     // For testing GenerateMipMaps()
     ColorBuffer g_GenMipsBuffer;
 
+	ColorBuffer g_GBufferAttributes0;
+	ColorBuffer g_GBufferAttributes1;
+	ColorBuffer g_GBufferAttributes2;
+
     DXGI_FORMAT DefaultHdrColorFormat = DXGI_FORMAT_R11G11B10_FLOAT;
 }
 
@@ -111,6 +115,10 @@ void Graphics::InitializeRenderingBuffers( uint32_t bufferWidth, uint32_t buffer
         g_SceneColorBuffer.Create( L"Main Color Buffer", bufferWidth, bufferHeight, 1, DefaultHdrColorFormat, esram );
         g_VelocityBuffer.Create( L"Motion Vectors", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R32_UINT );
         g_PostEffectsBuffer.Create( L"Post Effects Buffer", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R32_UINT );
+
+		g_GBufferAttributes0.Create(L"GBufferAttributes0", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R8G8B8A8_UNORM);
+		g_GBufferAttributes1.Create(L"GBufferAttributes1", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R8G8B8A8_UNORM);
+		g_GBufferAttributes2.Create(L"GBufferAttributes2", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R8G8B8A8_UNORM);
 
         esram.PushStack();    // Render HDR image
 
@@ -238,6 +246,10 @@ void Graphics::ResizeDisplayDependentBuffers(uint32_t /*NativeWidth*/, uint32_t 
 
 void Graphics::DestroyRenderingBuffers()
 {
+	g_GBufferAttributes0.Destroy();
+	g_GBufferAttributes1.Destroy();
+	g_GBufferAttributes2.Destroy();
+
     g_SceneDepthBuffer.Destroy();
     g_SceneColorBuffer.Destroy();
     g_VelocityBuffer.Destroy();
