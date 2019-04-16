@@ -546,18 +546,15 @@ void ModelViewer::RenderScene( void )
 			ScopedTimer _prof1(L"Opaque", gfxContext);
 			gfxContext.TransitionResource(g_GBufferAttributes0, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 			gfxContext.TransitionResource(g_GBufferAttributes1, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
-			gfxContext.TransitionResource(g_GBufferAttributes2, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE RTVs[] =
 			{
 				g_GBufferAttributes0.GetRTV(),
 				g_GBufferAttributes1.GetRTV(),
-				g_GBufferAttributes2.GetRTV()
 			};
 
 			gfxContext.ClearColor(g_GBufferAttributes0);
 			gfxContext.ClearColor(g_GBufferAttributes1);
-			gfxContext.ClearColor(g_GBufferAttributes2);
 
 			gfxContext.SetPipelineState(m_ModelAttributesPSO);
 			gfxContext.SetRenderTargets(_countof(RTVs), RTVs, g_SceneDepthBuffer.GetDSV());

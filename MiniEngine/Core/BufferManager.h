@@ -81,7 +81,6 @@ namespace Graphics
 
 	extern ColorBuffer g_GBufferAttributes0;
 	extern ColorBuffer g_GBufferAttributes1;
-	extern ColorBuffer g_GBufferAttributes2;
 
     void InitializeRenderingBuffers(uint32_t NativeWidth, uint32_t NativeHeight );
     void ResizeDisplayDependentBuffers(uint32_t NativeWidth, uint32_t NativeHeight);

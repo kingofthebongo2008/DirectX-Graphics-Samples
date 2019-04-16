@@ -34,7 +34,6 @@ struct PSOutput
 {
 	float4 attributes0 : SV_Target0;
 	float4 attributes1 : SV_Target1;
-	float4 attributes2 : SV_Target2;
 };
 
 Texture2D<float4> texDiffuse	: register(t0);
