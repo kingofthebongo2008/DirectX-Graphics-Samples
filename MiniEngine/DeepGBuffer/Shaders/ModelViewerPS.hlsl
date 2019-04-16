@@ -87,10 +87,10 @@ float3 ApplyAmbientLight(
 	return 0.0f;// ao* diffuse* lightColor;
 }
 
-float GetShadow( float3 ShadowCoord )
+float GetShadow( float3 ShadowCoord, Texture2D<float> shadowBuffer, SamplerComparisonState samplerShadow)
 {
 #ifdef SINGLE_SAMPLE
-    float result = texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy, ShadowCoord.z );
+    float result = shadowBuffer.SampleCmpLevelZero(samplerShadow, ShadowCoord.xy, ShadowCoord.z );
 #else
     const float Dilation = 2.0;
     float d1 = Dilation * ShadowTexelSize.x * 0.125;
@@ -154,7 +154,7 @@ float3 ApplyDirectionalLight(
     float3    shadowCoord        // Shadow coordinate (Shadow map UV & light-relative Z)
     )
 {
-    float shadow = GetShadow(shadowCoord);
+    float shadow = GetShadow(shadowCoord, texShadow, shadowSampler);
 
     return shadow * ApplyLightCommon(
         diffuseColor,
