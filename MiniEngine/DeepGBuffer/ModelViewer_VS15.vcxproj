@@ -178,6 +178,10 @@
       <ShaderType>Pixel</ShaderType>
     </FxCompile>
 
+   <FxCompile Include="Shaders\ModelViewerDirectCS.hlsl">
+      <ShaderType>Compute</ShaderType>
+   </FxCompile>
+
    <FxCompile Include="Shaders\ModelViewerAttributesVS.hlsl">
       <ShaderType>Vertex</ShaderType>
     </FxCompile>

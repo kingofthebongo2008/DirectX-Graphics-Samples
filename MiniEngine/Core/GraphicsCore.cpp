@@ -305,13 +305,13 @@ void Graphics::Initialize(void)
 
     Microsoft::WRL::ComPtr<ID3D12Device> pDevice;
 
-#if _DEBUG
+
     Microsoft::WRL::ComPtr<ID3D12Debug> debugInterface;
     if (SUCCEEDED(D3D12GetDebugInterface(MY_IID_PPV_ARGS(&debugInterface))))
         debugInterface->EnableDebugLayer();
     else
         Utility::Print("WARNING:  Unable to enable D3D12 debug validation layer\n");
-#endif
+
 
     EnableExperimentalShaderModels();
 
@@ -382,7 +382,6 @@ void Graphics::Initialize(void)
     }
 #endif    
 
-#if _DEBUG
     ID3D12InfoQueue* pInfoQueue = nullptr;
     if (SUCCEEDED(g_Device->QueryInterface(MY_IID_PPV_ARGS(&pInfoQueue))))
     {
@@ -427,7 +426,6 @@ void Graphics::Initialize(void)
         pInfoQueue->PushStorageFilter(&NewFilter);
         pInfoQueue->Release();
     }
-#endif
 
     // We like to do read-modify-write operations on UAVs during post processing.  To support that, we
     // need to either have the hardware do typed UAV loads of R11G11B10_FLOAT or we need to manually

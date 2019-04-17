@@ -39,10 +39,6 @@
 #include <ppltasks.h>
 #include <array>
 
-// To enable wave intrinsics, uncomment this macro and #define DXIL in Core/GraphcisCore.cpp.
-// Run CompileSM6Test.bat to compile the relevant shaders with DXC.
-//#define _WAVE_OP
-
 #include "CompiledShaders/DepthViewerVS.h"
 #include "CompiledShaders/DepthViewerAlphaVS.h"
 #include "CompiledShaders/DepthViewerAlphaPS.h"
@@ -50,14 +46,8 @@
 #include "CompiledShaders/ModelViewerPS.h"
 #include "CompiledShaders/ModelViewerAttributesVS.h"
 #include "CompiledShaders/ModelViewerAttributesPS.h"
-
-
-#ifdef _WAVE_OP
-#include "CompiledShaders/DepthViewerVS_SM6.h"
-#include "CompiledShaders/ModelViewerVS_SM6.h"
-#include "CompiledShaders/ModelViewerPS_SM6.h"
-#endif
 #include "CompiledShaders/WaveTileCountPS.h"
+#include "CompiledShaders/ModelViewerDirectCS.h"
 
 using namespace GameCore;
 using namespace Math;
@@ -89,19 +79,21 @@ private:
     D3D12_RECT m_MainScissor;
 
     RootSignature m_RootSig;
+	
+
     GraphicsPSO m_DepthPSO;
     GraphicsPSO m_CutoutDepthPSO;
     GraphicsPSO m_ModelPSO;
 	GraphicsPSO m_ModelAttributesPSO;
 	GraphicsPSO m_ModelAttributesCutoutPSO;
-#ifdef _WAVE_OP
-    GraphicsPSO m_DepthWaveOpsPSO;
-    GraphicsPSO m_ModelWaveOpsPSO;
-#endif
     GraphicsPSO m_CutoutModelPSO;
     GraphicsPSO m_ShadowPSO;
     GraphicsPSO m_CutoutShadowPSO;
     GraphicsPSO m_WaveTileCountPSO;
+
+	RootSignature m_DirectLightingSig;
+	ComputePSO	  m_DirectLightingPSO;
+	
 
     D3D12_CPU_DESCRIPTOR_HANDLE m_DefaultSampler;
     D3D12_CPU_DESCRIPTOR_HANDLE m_ShadowSampler;
@@ -126,10 +118,6 @@ NumVar ShadowDimY("Application/Lighting/Shadow Dim Y", 3000, 1000, 10000, 100 );
 NumVar ShadowDimZ("Application/Lighting/Shadow Dim Z", 3000, 1000, 10000, 100 );
 
 BoolVar ShowWaveTileCounts("Application/Forward+/Show Wave Tile Counts", false);
-#ifdef _WAVE_OP
-BoolVar EnableWaveOps("Application/Forward+/Enable Wave Ops", true);
-#endif
-
 void ModelViewer::Startup( void )
 {
     SamplerDesc DefaultSamplerDesc;
@@ -167,6 +155,28 @@ void ModelViewer::Startup( void )
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
+
+	m_RootSig.Reset(5, 2);
+	m_RootSig.InitStaticSampler(0, DefaultSamplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_RootSig.InitStaticSampler(1, SamplerShadowDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_RootSig[0].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_VERTEX);
+	m_RootSig[1].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_RootSig[2].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 6, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_RootSig[3].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 64, 6, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_RootSig[4].InitAsConstants(1, 2, D3D12_SHADER_VISIBILITY_VERTEX);
+	m_RootSig.Finalize(L"m_RootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	m_DirectLightingSig.Reset(4, 2);
+	m_DirectLightingSig.InitStaticSampler(0, DefaultSamplerDesc);
+	m_DirectLightingSig.InitStaticSampler(1, SamplerShadowDesc);
+
+	m_DirectLightingSig[0].InitAsConstantBuffer(0);
+	m_DirectLightingSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 6);
+	m_DirectLightingSig[2].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 64, 6);
+	m_DirectLightingSig[3].InitAsBufferUAV(0);
+	m_DirectLightingSig.Finalize(L"m_DirectLightingSig", D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+
 
 
 
@@ -226,24 +236,17 @@ void ModelViewer::Startup( void )
 		m_ModelAttributesCutoutPSO.SetRasterizerState(RasterizerTwoSided);
 	}
 
-
-#ifdef _WAVE_OP
-    m_DepthWaveOpsPSO = m_DepthPSO;
-    m_DepthWaveOpsPSO.SetVertexShader( g_pDepthViewerVS_SM6, sizeof(g_pDepthViewerVS_SM6) );
-    m_DepthWaveOpsPSO.Finalize();
-
-    m_ModelWaveOpsPSO = m_ModelPSO;
-    m_ModelWaveOpsPSO.SetVertexShader( g_pModelViewerVS_SM6, sizeof(g_pModelViewerVS_SM6) );
-    m_ModelWaveOpsPSO.SetPixelShader( g_pModelViewerPS_SM6, sizeof(g_pModelViewerPS_SM6) );
-    m_ModelWaveOpsPSO.Finalize();
-#endif
-
     m_CutoutModelPSO = m_ModelPSO;
     m_CutoutModelPSO.SetRasterizerState(RasterizerTwoSided);
 
     // A debug shader for counting lights in a tile
     m_WaveTileCountPSO = m_ModelPSO;
     m_WaveTileCountPSO.SetPixelShader(g_pWaveTileCountPS, sizeof(g_pWaveTileCountPS));
+
+
+	m_DirectLightingPSO.SetRootSignature(m_DirectLightingSig);
+	m_DirectLightingPSO.SetComputeShader(g_pModelViewerDirectCS, sizeof(g_pModelViewerDirectCS));
+	m_DirectLightingPSO.Finalize();
 	
 	concurrency::task_group g;
 
@@ -519,12 +522,7 @@ void ModelViewer::RenderScene( void )
             ScopedTimer _prof1(L"Opaque", gfxContext);
             gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
             gfxContext.ClearDepth(g_SceneDepthBuffer);
-
-#ifdef _WAVE_OP
-            gfxContext.SetPipelineState(EnableWaveOps ? m_DepthWaveOpsPSO : m_DepthPSO );
-#else
             gfxContext.SetPipelineState(m_DepthPSO);
-#endif
             gfxContext.SetDepthStencilTarget(g_SceneDepthBuffer.GetDSV());
             gfxContext.SetViewportAndScissor(m_MainViewport, m_MainScissor);
             RenderObjects(gfxContext, m_ViewProjMatrix, kOpaque );
@@ -557,7 +555,7 @@ void ModelViewer::RenderScene( void )
 			gfxContext.ClearColor(g_GBufferAttributes1);
 
 			gfxContext.SetPipelineState(m_ModelAttributesPSO);
-			gfxContext.SetRenderTargets(_countof(RTVs), RTVs, g_SceneDepthBuffer.GetDSV());
+			gfxContext.SetRenderTargets(_countof(RTVs), RTVs, g_SceneDepthBuffer.GetDSV_ReadOnly());
 			gfxContext.SetViewportAndScissor(m_MainViewport, m_MainScissor);
 			RenderObjects(gfxContext, m_ViewProjMatrix, kOpaque);
 		}
@@ -605,19 +603,38 @@ void ModelViewer::RenderScene( void )
             g_CommandManager.GetGraphicsQueue().StallForProducer(g_CommandManager.GetComputeQueue());
         }
 
+		gfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
+
+		{
+			ScopedTimer _prof4(L"Direct Color", gfxContext);
+
+			gfxContext.SetDynamicDescriptors(3, 0, _countof(m_ExtraTextures), m_ExtraTextures);
+			gfxContext.SetDynamicConstantBufferView(1, sizeof(psConstants), &psConstants);
+
+			gfxContext.SetPipelineState(ShowWaveTileCounts ? m_WaveTileCountPSO : m_ModelPSO);
+
+			gfxContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV_DepthReadOnly());
+
+			gfxContext.SetViewportAndScissor(m_MainViewport, m_MainScissor);
+
+
+			RenderObjects(gfxContext, m_ViewProjMatrix, kOpaque);
+
+			if (!ShowWaveTileCounts)
+			{
+				gfxContext.SetPipelineState(m_CutoutModelPSO);
+				RenderObjects(gfxContext, m_ViewProjMatrix, kCutout);
+			}
+		}
+
         {
             ScopedTimer _prof4(L"Render Color", gfxContext);
 
-            gfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-            gfxContext.SetDynamicDescriptors(3, 0, _countof(m_ExtraTextures), m_ExtraTextures);
+			gfxContext.SetDynamicDescriptors(3, 0, _countof(m_ExtraTextures), m_ExtraTextures);
             gfxContext.SetDynamicConstantBufferView(1, sizeof(psConstants), &psConstants);
-#ifdef _WAVE_OP
-            gfxContext.SetPipelineState(EnableWaveOps ? m_ModelWaveOpsPSO : m_ModelPSO );
-#else
             gfxContext.SetPipelineState(ShowWaveTileCounts ? m_WaveTileCountPSO : m_ModelPSO);
-#endif
-            gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
+        
             gfxContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV_DepthReadOnly());
             gfxContext.SetViewportAndScissor(m_MainViewport, m_MainScissor);
 

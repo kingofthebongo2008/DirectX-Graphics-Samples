@@ -13,6 +13,7 @@
 //
 // Thanks to Michal Drobot for his feedback.
 
+#include "Shadows.hlsli"
 #include "ModelViewerRS.hlsli"
 #include "LightGrid.hlsli"
 
@@ -33,9 +34,8 @@ struct VSOutput
     sample float3 bitangent : Bitangent;
 };
 
-Texture2D<float3> texDiffuse        : register(t0);
-Texture2D<float3> texSpecular        : register(t1);
-Texture2D<float3> texNormal            : register(t3);
+Texture2D<float3> texAttributes0	 : register(t0);
+Texture2D<float3> texAttributes1      : register(t1);
 Texture2D<float> texSSAO            : register(t64);
 Texture2D<float> texShadow            : register(t65);
 
@@ -43,7 +43,7 @@ StructuredBuffer<LightData> lightBuffer : register(t66);
 Texture2DArray<float> lightShadowArrayTex : register(t67);
 ByteAddressBuffer lightGrid : register(t68);
 
-
+RWByteAddressBuffer directLightBuffer : register(u0);
 
 cbuffer PSConstants : register(b0)
 {
@@ -60,14 +60,6 @@ cbuffer PSConstants : register(b0)
 SamplerState sampler0 : register(s0);
 SamplerComparisonState shadowSampler : register(s1);
 
-void AntiAliasSpecular( inout float3 texNormal, inout float gloss )
-{
-    float normalLenSq = dot(texNormal, texNormal);
-    float invNormalLen = rsqrt(normalLenSq);
-    texNormal *= invNormalLen;
-    gloss = lerp(1, gloss, rcp(invNormalLen));
-}
-
 // Apply fresnel to modulate the specular albedo
 void FSchlick( inout float3 specular, inout float3 diffuse, float3 lightDir, float3 halfVec )
 {
@@ -83,31 +75,6 @@ float3 ApplyAmbientLight(
     )
 {
 	return 0.0f;// ao* diffuse* lightColor;
-}
-
-float GetShadow( float3 ShadowCoord, Texture2D<float> shadowBuffer, SamplerComparisonState samplerShadow)
-{
-#ifdef SINGLE_SAMPLE
-    float result = shadowBuffer.SampleCmpLevelZero(samplerShadow, ShadowCoord.xy, ShadowCoord.z );
-#else
-    const float Dilation = 2.0;
-    float d1 = Dilation * ShadowTexelSize.x * 0.125;
-    float d2 = Dilation * ShadowTexelSize.x * 0.875;
-    float d3 = Dilation * ShadowTexelSize.x * 0.625;
-    float d4 = Dilation * ShadowTexelSize.x * 0.375;
-    float result = (
-        2.0 * texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy, ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2(-d2,  d1), ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2(-d1, -d2), ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2( d2, -d1), ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2( d1,  d2), ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2(-d4,  d3), ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2(-d3, -d4), ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2( d4, -d3), ShadowCoord.z ) +
-        texShadow.SampleCmpLevelZero( shadowSampler, ShadowCoord.xy + float2( d3,  d4), ShadowCoord.z )
-        ) / 10.0;
-#endif
-    return result * result;
 }
 
 float GetShadowConeLight(uint lightIndex, float3 shadowCoord, Texture2DArray<float> shadowBuffer, SamplerComparisonState samplerShadow)
@@ -148,13 +115,10 @@ float3 ApplyDirectionalLight(
     float3    normal,            // World-space normal
     float3    viewDir,        // World-space vector from eye to point
     float3    lightDir,        // World-space vector from point to light
-    float3    lightColor,        // Radiance of directional light
-    float3    shadowCoord        // Shadow coordinate (Shadow map UV & light-relative Z)
+    float3    lightColor        // Radiance of directional light
     )
 {
-    float shadow = GetShadow(shadowCoord, texShadow, shadowSampler);
-
-    return shadow * ApplyLightCommon(
+    return ApplyLightCommon(
         diffuseColor,
         specularColor,
         specularMask,
@@ -241,30 +205,48 @@ float3 ApplyConeLight(
         );
 }
 
-[RootSignature(ModelViewer_RootSig)]
-float4 main(VSOutput vsOutput) : SV_Target0
+#define _RootSig \
+    "RootFlags(0), " \
+    "CBV(b0), " \
+    "DescriptorTable(SRV(t0, numDescriptors = 6))," \
+    "DescriptorTable(SRV(t64, numDescriptors = 6))," \
+	"UAV(u0)," \
+    "StaticSampler(s0, maxAnisotropy = 8)," \
+    "StaticSampler(s1, " \
+        "addressU = TEXTURE_ADDRESS_CLAMP," \
+        "addressV = TEXTURE_ADDRESS_CLAMP," \
+        "addressW = TEXTURE_ADDRESS_CLAMP," \
+        "comparisonFunc = COMPARISON_GREATER_EQUAL," \
+        "filter = FILTER_MIN_MAG_LINEAR_MIP_POINT)"
+
+[RootSignature(_RootSig)]
+[numthreads(8, 8, 1)]
+void main(uint3 globalID : SV_DispatchThreadID,
+	uint3 groupID : SV_GroupID,
+	uint3 threadID : SV_GroupThreadID,
+	uint threadIndex : SV_GroupIndex)
 {
-    uint2 pixelPos = vsOutput.position.xy;
-    float3 diffuseAlbedo = texDiffuse.Sample(sampler0, vsOutput.uv);
-    float3 colorSum = 0;
-    {
+    uint2 pixelPos		 = uint2(0,0);
+	float3 diffuseAlbedo = float3(0, 0, 0);
+    
+	float3 colorSum = 0;
+
+	{
         float ao = texSSAO[pixelPos];
         colorSum += ApplyAmbientLight( diffuseAlbedo, ao, AmbientColor );
     }
 
-    float gloss = 128.0;
-    float3 normal;
-    {
-        normal = texNormal.Sample(sampler0, vsOutput.uv) * 2.0 - 1.0;
-        AntiAliasSpecular(normal, gloss);
-        float3x3 tbn = float3x3(normalize(vsOutput.tangent), normalize(vsOutput.bitangent), normalize(vsOutput.normal));
-        normal = normalize(mul(normal, tbn));
-    }
-
+	//deduce from the gbuffer
+    float gloss			  = 128.0;
+	float3 normal		  = float3(0, 0, 0);
     float3 specularAlbedo = float3( 0.56, 0.56, 0.56 );
-    float specularMask = texSpecular.Sample(sampler0, vsOutput.uv).g;
-    float3 viewDir = normalize(vsOutput.viewDir);
-    colorSum += ApplyDirectionalLight( diffuseAlbedo, specularAlbedo, specularMask, gloss, normal, viewDir, SunDirection, SunColor, vsOutput.shadowCoord );
+	float specularMask	  = 1.0f;
+	float3 viewDir		  = float3(0, 1, 0);
+	float3 shadowCoord = float3(1, 0, 0);
+	float3 worldPos = float3(1, 0, 0);
+
+	float  shadow = GetShadow(shadowCoord, texShadow, shadowSampler, ShadowTexelSize.x);
+    colorSum += shadow * ApplyDirectionalLight( diffuseAlbedo, specularAlbedo, specularMask, gloss, normal, viewDir, SunDirection, SunColor );
 
     uint2 tilePos = GetTilePos(pixelPos, InvTileDim.xy);
     uint tileIndex = GetTileIndex(tilePos, TileCount.x);
@@ -277,7 +259,7 @@ float4 main(VSOutput vsOutput) : SV_Target0
     gloss, \
     normal, \
     viewDir, \
-    vsOutput.worldPos, \
+    worldPos, \
     lightData.pos, \
     lightData.radiusSq, \
     lightData.color
@@ -321,11 +303,12 @@ float4 main(VSOutput vsOutput) : SV_Target0
     {
         uint lightIndex = lightGrid.Load(tileLightLoadOffset);
         LightData lightData = lightBuffer[lightIndex];
-		float4 shadowCoord	= mul(lightData.shadowTextureMatrix, float4(vsOutput.worldPos, 1.0));
+		float4 shadowCoord	= mul(lightData.shadowTextureMatrix, float4(worldPos, 1.0));
 		shadowCoord.xyz		*= rcp(shadowCoord.w);
 		float shadow		= GetShadowConeLight(lightIndex, shadowCoord.xyz, lightShadowArrayTex, shadowSampler);
         colorSum += shadow * ApplyConeLight(CONE_LIGHT_ARGS);
     }
 
-	return float4(colorSum, 1);
+
+	directLightBuffer.Store3(threadID.x, asuint(colorSum));
 }
