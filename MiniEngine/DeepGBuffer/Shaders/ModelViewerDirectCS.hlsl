@@ -210,8 +210,8 @@ float3 ApplyConeLight(
     "CBV(b0), " \
     "DescriptorTable(SRV(t0, numDescriptors = 6))," \
     "DescriptorTable(SRV(t64, numDescriptors = 6))," \
-	"UAV(u0)," \
-    "StaticSampler(s0, maxAnisotropy = 8)," \
+	"DescriptorTable(UAV(u0, numDescriptors = 1))," \
+	"StaticSampler(s0, maxAnisotropy = 8)," \
     "StaticSampler(s1, " \
         "addressU = TEXTURE_ADDRESS_CLAMP," \
         "addressV = TEXTURE_ADDRESS_CLAMP," \

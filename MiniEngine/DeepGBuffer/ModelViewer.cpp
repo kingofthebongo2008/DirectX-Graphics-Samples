@@ -173,7 +173,7 @@ void ModelViewer::Startup( void )
 	m_DirectLightingSig[0].InitAsConstantBuffer(0);
 	m_DirectLightingSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 6);
 	m_DirectLightingSig[2].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 64, 6);
-	m_DirectLightingSig[3].InitAsBufferUAV(0);
+	m_DirectLightingSig[3].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
 	m_DirectLightingSig.Finalize(L"m_DirectLightingSig", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 
@@ -605,29 +605,44 @@ void ModelViewer::RenderScene( void )
 
 		gfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
-
+		gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		{
-			ScopedTimer _prof4(L"Direct Color", gfxContext);
-
-			gfxContext.SetDynamicDescriptors(3, 0, _countof(m_ExtraTextures), m_ExtraTextures);
-			gfxContext.SetDynamicConstantBufferView(1, sizeof(psConstants), &psConstants);
-
-			gfxContext.SetPipelineState(ShowWaveTileCounts ? m_WaveTileCountPSO : m_ModelPSO);
-
-			gfxContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV_DepthReadOnly());
-
-			gfxContext.SetViewportAndScissor(m_MainViewport, m_MainScissor);
-
-
-			RenderObjects(gfxContext, m_ViewProjMatrix, kOpaque);
-
-			if (!ShowWaveTileCounts)
+		
+			ComputeContext& ctx = gfxContext.GetComputeContext();
 			{
-				gfxContext.SetPipelineState(m_CutoutModelPSO);
-				RenderObjects(gfxContext, m_ViewProjMatrix, kCutout);
+				ScopedTimer _prof4(L"Direct Lighting", ctx);
+
+				ctx.SetRootSignature(m_DirectLightingSig);
+
+				ctx.SetDynamicConstantBufferView(0, sizeof(psConstants), &psConstants);
+
+				{
+					D3D12_CPU_DESCRIPTOR_HANDLE  resources[]
+					{
+						g_GBufferAttributes0.GetSRV(),
+						g_GBufferAttributes1.GetSRV(),
+						g_SceneDepthBuffer.GetDepthSRV()
+					};
+
+					ctx.SetDynamicDescriptors(1, 0, _countof(resources), resources);
+				}
+
+				ctx.SetDynamicDescriptors(2, 0, _countof(m_ExtraTextures), m_ExtraTextures);
+
+				{
+					D3D12_CPU_DESCRIPTOR_HANDLE  resources[]
+					{
+						g_SceneColorBuffer.GetUAV()
+					};
+					ctx.SetDynamicDescriptors(3, 0, _countof(resources), resources);
+				}
+				
+				ctx.SetPipelineState(m_DirectLightingPSO);
+				ctx.Dispatch(1, 1, 1);
 			}
 		}
 
+		gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
         {
             ScopedTimer _prof4(L"Render Color", gfxContext);
 
