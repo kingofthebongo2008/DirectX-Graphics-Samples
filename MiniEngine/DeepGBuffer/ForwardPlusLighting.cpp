@@ -201,29 +201,7 @@ void Lighting::CreateRandomLights( const Vector3 minBound, const Vector3 maxBoun
         std::memcpy(m_LightData[n].shadowTextureMatrix, &shadowTextureMatrix, sizeof(shadowTextureMatrix));
         //*(Matrix4*)(m_LightData[n].shadowTextureMatrix) = shadowTextureMatrix;
     }
-    // sort lights by type, needed for efficiency in the BIT_MASK approach
-    /*    {
-    Matrix4 copyLightShadowMatrix[MaxLights];
-    memcpy(copyLightShadowMatrix, m_LightShadowMatrix, sizeof(Matrix4) * MaxLights);
-    LightData copyLightData[MaxLights];
-    memcpy(copyLightData, m_LightData, sizeof(LightData) * MaxLights);
-
-    uint32_t sortArray[MaxLights];
-    for (uint32_t n = 0; n < MaxLights; n++)
-    {
-    sortArray[n] = n;
-    }
-    std::sort(sortArray, sortArray + MaxLights,
-    [this](const uint32_t &a, const uint32_t &b) -> bool
-    {
-    return this->m_LightData[a].type < this->m_LightData[b].type;
-    });
-    for (uint32_t n = 0; n < MaxLights; n++)
-    {
-    m_LightShadowMatrix[n] = copyLightShadowMatrix[sortArray[n]];
-    m_LightData[n] = copyLightData[sortArray[n]];
-    }
-    }*/
+    
     for (uint32_t n = 0; n < MaxLights; n++)
     {
         if (m_LightData[n].type == 1)
