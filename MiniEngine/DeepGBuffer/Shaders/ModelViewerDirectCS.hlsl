@@ -34,14 +34,16 @@ struct VSOutput
     sample float3 bitangent : Bitangent;
 };
 
-Texture2D<float3> texAttributes0	 : register(t0);
-Texture2D<float3> texAttributes1      : register(t1);
-Texture2D<float> texSSAO            : register(t64);
-Texture2D<float> texShadow            : register(t65);
+Texture2D<float3> texAttributes0			: register(t0);
+Texture2D<float3> texAttributes1			: register(t1);
+Texture2D<float>  texDepth					: register(t2);
 
-StructuredBuffer<LightData> lightBuffer : register(t66);
-Texture2DArray<float> lightShadowArrayTex : register(t67);
-ByteAddressBuffer lightGrid : register(t68);
+//Extra textures
+Texture2D<float> texSSAO					: register(t64);
+Texture2D<float> texShadow					: register(t65);
+StructuredBuffer<LightData> lightBuffer		: register(t66);
+Texture2DArray<float> lightShadowArrayTex	: register(t67);
+ByteAddressBuffer lightGrid					: register(t68);
 
 RWByteAddressBuffer directLightBuffer : register(u0);
 
@@ -52,9 +54,9 @@ cbuffer PSConstants : register(b0)
     float3 AmbientColor;
     float4 ShadowTexelSize;
 
-    float4 InvTileDim;
-    uint4 TileCount;
-    uint4 FirstLightIndex;
+    float4	InvTileDim;
+    uint4	TileCount;
+    uint4	FirstLightIndex;
 }
 
 SamplerState sampler0 : register(s0);
@@ -227,7 +229,10 @@ void main(uint3 globalID : SV_DispatchThreadID,
 	uint threadIndex : SV_GroupIndex)
 {
     uint2 pixelPos		 = uint2(0,0);
-	float3 diffuseAlbedo = float3(0, 0, 0);
+	float3 diffuseAlbedo = texAttributes0.Load(uint3(0, 0, 0));
+	float  depth		 = texDepth.Load(uint3(0, 0, 0));
+
+	diffuseAlbedo.x		+= depth;
     
 	float3 colorSum = 0;
 
@@ -237,20 +242,20 @@ void main(uint3 globalID : SV_DispatchThreadID,
     }
 
 	//deduce from the gbuffer
-    float gloss			  = 128.0;
-	float3 normal		  = float3(0, 0, 0);
-    float3 specularAlbedo = float3( 0.56, 0.56, 0.56 );
-	float specularMask	  = 1.0f;
-	float3 viewDir		  = float3(0, 1, 0);
-	float3 shadowCoord = float3(1, 0, 0);
-	float3 worldPos = float3(1, 0, 0);
+    float gloss				= 128.0;
+	float3 normal			= texAttributes1.Load(uint3(0, 0, 0));
+    float3 specularAlbedo	= float3( 0.56, 0.56, 0.56 );
+	float specularMask		= 1.0f;
+	float3 viewDir			= float3(0, 1, 0);
+	float3 shadowCoord		= float3(1, 0, 0);
+	float3 worldPos			= float3(1, 0, 0);
 
-	float  shadow = GetShadow(shadowCoord, texShadow, shadowSampler, ShadowTexelSize.x);
+	float  shadow			= GetShadow(shadowCoord, texShadow, shadowSampler, ShadowTexelSize.x);
     colorSum += shadow * ApplyDirectionalLight( diffuseAlbedo, specularAlbedo, specularMask, gloss, normal, viewDir, SunDirection, SunColor );
 
-    uint2 tilePos = GetTilePos(pixelPos, InvTileDim.xy);
-    uint tileIndex = GetTileIndex(tilePos, TileCount.x);
-    uint tileOffset = GetTileOffset(tileIndex);
+    uint2 tilePos			= GetTilePos(pixelPos, InvTileDim.xy);
+    uint tileIndex			= GetTileIndex(tilePos, TileCount.x);
+    uint tileOffset			= GetTileOffset(tileIndex);
 
 #define POINT_LIGHT_ARGS \
     diffuseAlbedo, \
@@ -310,5 +315,5 @@ void main(uint3 globalID : SV_DispatchThreadID,
     }
 
 
-	directLightBuffer.Store3(threadID.x, asuint(colorSum));
+	directLightBuffer.Store3(threadID.x, diffuseAlbedo  + normal);
 }

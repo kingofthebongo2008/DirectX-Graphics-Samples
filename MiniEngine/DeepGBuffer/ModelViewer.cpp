@@ -542,7 +542,7 @@ void ModelViewer::RenderScene( void )
 
 		{
 			ScopedTimer _prof1(L"Opaque", gfxContext);
-			gfxContext.TransitionResource(g_GBufferAttributes0, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+			gfxContext.TransitionResource(g_GBufferAttributes0, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			gfxContext.TransitionResource(g_GBufferAttributes1, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE RTVs[] =
@@ -575,9 +575,6 @@ void ModelViewer::RenderScene( void )
     {
         ScopedTimer _prof(L"Main Render", gfxContext);
 
-        gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
-        gfxContext.ClearColor(g_SceneColorBuffer);
-
         pfnSetupGraphicsState();
 
         {
@@ -604,8 +601,11 @@ void ModelViewer::RenderScene( void )
         }
 
 		gfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
-		gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		gfxContext.TransitionResource(g_GBufferAttributes0, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		gfxContext.TransitionResource(g_GBufferAttributes1, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+
 		{
 		
 			ComputeContext& ctx = gfxContext.GetComputeContext();
@@ -642,7 +642,10 @@ void ModelViewer::RenderScene( void )
 			}
 		}
 
+		gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
 		gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+		gfxContext.ClearColor(g_SceneColorBuffer);
+
         {
             ScopedTimer _prof4(L"Render Color", gfxContext);
 
@@ -661,7 +664,6 @@ void ModelViewer::RenderScene( void )
                 RenderObjects( gfxContext, m_ViewProjMatrix, kCutout );
             }
         }
-
     }
 
     // Some systems generate a per-pixel velocity buffer to better track dynamic and skinned meshes.  Everything
