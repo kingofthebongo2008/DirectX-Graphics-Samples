@@ -29,7 +29,7 @@ color_rec_709 color_oetf_srgb( color_rec_709_srgb_gamma v )
     float  threshold = 0.04045;
     float  a         = 0.055;    
     float3 a0 = v / 12.92;
-    float3 a1 = pow( ( (v + a) / (1 + a) ) , 2.4);
+    float3 a1 = pow( abs( ( (v + a) / (1 + a) ) ) , 2.4);
 
     return v <= threshold ? a0 : a1;
 }
