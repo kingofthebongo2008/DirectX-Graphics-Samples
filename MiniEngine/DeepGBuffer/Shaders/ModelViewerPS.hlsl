@@ -55,6 +55,9 @@ cbuffer PSConstants : register(b0)
     float4 InvTileDim;
     uint4 TileCount;
     uint4 FirstLightIndex;
+	uint  FrameIndexMod2;
+	float4x4 modelToShadow;
+	float3 ViewerPos;
 }
 
 SamplerState sampler0 : register(s0);

@@ -16,6 +16,7 @@
 #include "Shadows.hlsli"
 #include "ModelViewerRS.hlsli"
 #include "LightGrid.hlsli"
+#include "Color.hlsli"
 
 // outdated warning about for-loop variable scope
 #pragma warning (disable: 3078)
@@ -34,8 +35,8 @@ struct VSOutput
     sample float3 bitangent : Bitangent;
 };
 
-Texture2D<float3> texAttributes0			: register(t0);
-Texture2D<float3> texAttributes1			: register(t1);
+Texture2D<float4> texAttributes0			: register(t0);
+Texture2D<float4> texAttributes1			: register(t1);
 Texture2D<float>  texDepth					: register(t2);
 
 //Extra textures
@@ -45,7 +46,7 @@ StructuredBuffer<LightData> lightBuffer		: register(t66);
 Texture2DArray<float> lightShadowArrayTex	: register(t67);
 ByteAddressBuffer lightGrid					: register(t68);
 
-RWByteAddressBuffer directLightBuffer : register(u0);
+RWTexture2D<float4>	 directLightBuffer : register(u0);
 
 cbuffer PSConstants : register(b0)
 {
@@ -57,6 +58,9 @@ cbuffer PSConstants : register(b0)
     float4	InvTileDim;
     uint4	TileCount;
     uint4	FirstLightIndex;
+	uint	FrameIndexMod2;
+	float4x4 modelToShadow;
+	float3 ViewerPos;
 }
 
 SamplerState sampler0 : register(s0);
@@ -228,13 +232,17 @@ void main(uint3 globalID : SV_DispatchThreadID,
 	uint3 threadID : SV_GroupThreadID,
 	uint threadIndex : SV_GroupIndex)
 {
-    uint2 pixelPos		 = uint2(0,0);
-	float3 diffuseAlbedo = texAttributes0.Load(uint3(0, 0, 0));
-	float  depth		 = texDepth.Load(uint3(0, 0, 0));
+	
+	//r.attributes0 = float4(color_eotf_srgb(diffuseAlbedo), gloss / glossMax);
+	//r.attributes1 = float4(normal * 0.5 + 0.5, specularMask);
+	uint2 pixelPos			= uint2(globalID.xy);
+	float4 attributes0		= texAttributes0.Load(uint3(pixelPos, 0));
+	float4 attributes1		= texAttributes1.Load(uint3(pixelPos, 0));
 
-	diffuseAlbedo.x		+= depth;
-    
-	float3 colorSum = 0;
+	
+	float3 diffuseAlbedo	= color_oetf_srgb(attributes0.xyz);
+	float  depth			= texDepth.Load(uint3(pixelPos, 0));
+	float3 colorSum			= 0;
 
 	{
         float ao = texSSAO[pixelPos];
@@ -242,15 +250,15 @@ void main(uint3 globalID : SV_DispatchThreadID,
     }
 
 	//deduce from the gbuffer
-    float gloss				= 128.0;
-	float3 normal			= texAttributes1.Load(uint3(0, 0, 0));
+    float gloss				= attributes0.w * 128.0;
+	float3 normal			= 2.0 * attributes1.xyz - 1.0f;
     float3 specularAlbedo	= float3( 0.56, 0.56, 0.56 );
-	float specularMask		= 1.0f;
-	float3 viewDir			= float3(0, 1, 0);
+	float specularMask		= attributes1.w;
 	float3 shadowCoord		= float3(1, 0, 0);
-	float3 worldPos			= float3(1, 0, 0);
+	float3 worldPos			= float4( (pixelPos + 0.5f) * depth, 1.0, depth).xyz;
+	float3 viewDir			= normalize(worldPos - ViewerPos);
 
-	float  shadow			= GetShadow(shadowCoord, texShadow, shadowSampler, ShadowTexelSize.x);
+	float  shadow			= 1.0f;// GetShadow(shadowCoord, texShadow, shadowSampler, ShadowTexelSize.x);
     colorSum += shadow * ApplyDirectionalLight( diffuseAlbedo, specularAlbedo, specularMask, gloss, normal, viewDir, SunDirection, SunColor );
 
     uint2 tilePos			= GetTilePos(pixelPos, InvTileDim.xy);
@@ -314,6 +322,5 @@ void main(uint3 globalID : SV_DispatchThreadID,
         colorSum += shadow * ApplyConeLight(CONE_LIGHT_ARGS);
     }
 
-
-	directLightBuffer.Store3(threadID.x, diffuseAlbedo  + normal);
+	directLightBuffer[pixelPos] = float4(colorSum, 0);
 }

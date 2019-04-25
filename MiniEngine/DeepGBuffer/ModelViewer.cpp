@@ -107,6 +107,11 @@ private:
     ShadowCamera m_SunShadow;
 };
 
+uint32_t align_up(uint32_t value, uint32_t alignment)
+{
+	return ( value + (alignment - 1)) & (~(alignment - 1));
+}
+
 CREATE_APPLICATION( ModelViewer )
 
 ExpVar m_SunLightIntensity("Application/Lighting/Sun Light Intensity", 4.0f, 0.0f, 16.0f, 0.1f);
@@ -485,6 +490,8 @@ void ModelViewer::RenderScene( void )
         uint32_t TileCount[4];
         uint32_t FirstLightIndex[4];
         uint32_t FrameIndexMod2;
+		Matrix4  modelToShadow;
+		Vector3  ViewerPos;
     } psConstants;
 
     psConstants.sunDirection = m_SunDirection;
@@ -498,8 +505,10 @@ void ModelViewer::RenderScene( void )
     psConstants.FirstLightIndex[0] = Lighting::m_FirstConeLight;
     psConstants.FirstLightIndex[1] = Lighting::m_FirstConeShadowedLight;
     psConstants.FrameIndexMod2 = FrameIndex;
+	psConstants.modelToShadow = m_SunShadow.GetShadowMatrix();
+	psConstants.ViewerPos = m_Camera.GetPosition();
 
-    // Set the default state for command lists
+	// Set the default state for command lists
     auto pfnSetupGraphicsState = [&](void)
     {
         gfxContext.SetRootSignature(m_RootSig);
@@ -612,6 +621,7 @@ void ModelViewer::RenderScene( void )
 			{
 				ScopedTimer _prof4(L"Direct Lighting", ctx);
 
+				ctx.ClearUAV(g_SceneColorBuffer);
 				ctx.SetRootSignature(m_DirectLightingSig);
 
 				ctx.SetDynamicConstantBufferView(0, sizeof(psConstants), &psConstants);
@@ -621,7 +631,7 @@ void ModelViewer::RenderScene( void )
 					{
 						g_GBufferAttributes0.GetSRV(),
 						g_GBufferAttributes1.GetSRV(),
-						g_SceneDepthBuffer.GetDepthSRV()
+						g_LinearDepth[Graphics::GetFrameCount() % 2].GetSRV()
 					};
 
 					ctx.SetDynamicDescriptors(1, 0, _countof(resources), resources);
@@ -638,7 +648,13 @@ void ModelViewer::RenderScene( void )
 				}
 				
 				ctx.SetPipelineState(m_DirectLightingPSO);
-				ctx.Dispatch(1, 1, 1);
+				{
+					uint32_t Width	= g_SceneColorBuffer.GetWidth();
+					uint32_t Height = g_SceneColorBuffer.GetHeight();
+
+					ctx.Dispatch2D(align_up(Width, 8), align_up(Height, 8) );
+				}
+				
 			}
 		}
 

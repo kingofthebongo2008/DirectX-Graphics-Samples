@@ -56,7 +56,7 @@ PSOutput main(VSOutput vsOutput)
 
 	float3 diffuseAlbedo = sampleAlbedo.rgb;
 	float gloss		= 128.0;
-	float glossMax	= gloss;;
+	float glossMax	= 128.0;
 
 	float3 normal;
 	{
